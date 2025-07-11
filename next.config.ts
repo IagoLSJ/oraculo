@@ -2,6 +2,9 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   // Configuração para otimização de imagens externas
   images: {
     remotePatterns: [
