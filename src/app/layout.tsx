@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Oraculo",
+  title: "Oráculo",
 };
 
 export default function RootLayout({
