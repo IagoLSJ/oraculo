@@ -8,7 +8,7 @@ import { AlertCircle, ArrowLeft, Download, TrendingUp, Target, CheckCircle, Cloc
 import dynamic from 'next/dynamic';
 
 // Importa o Plotly de forma dinâmica para otimizar o carregamento
-const Plot = dynamic(() => import('react-plotly.js'), { ssr: false, loading: () => <p className="text-center p-4">A carregar gráfico...</p> });
+const Plot = dynamic(() => import('react-plotly.js'), { ssr: false, loading: () => <p className="text-center p-4">A carregar gráfico...</p> }) as any;
 
 export default function ResultadosPage() {
     const router = useRouter();
