@@ -1,229 +1,227 @@
-// src/app/page.tsx
-"use client"; // Esta diretiva é FUNDAMENTAL para usar hooks de React e manipulação de DOM.
+"use client";
 
-import React, { useRef, useState } from 'react'; // Importação única e correta de React hooks
-import { useRouter } from 'next/navigation'; // Importamos useRouter para navegação
+import { useState } from "react";
+import { Upload, FileText, AlertCircle, CheckCircle } from "lucide-react";
+import { useRouter } from 'next/navigation'
 
-// Importação dos componentes usando alias @ (assumindo que está configurado)
-import Header from '@/components/Header';
-import CardAnalise from '@/components/CardAnalise';
-import FeatureBlock from '@/components/FeatureBlock';
-import UploadIcon from '@/components/UploadIcon'; // Garantimos que UploadIcon é importado de um arquivo separado
-import AjustesModal from '@/components/AjustesModal'; // Importamos o AjustesModal
+export default function UploadPage() {
+  const router = useRouter()
+  const [file, setFile] = useState<File | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
 
-const OraculoHomePage: React.FC = () => {
-  // Estado para o arquivo selecionado
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  // Estado para controlar a visibilidade do modal de ajustes
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const validateFile = (file: File): boolean => {
+    const maxSize = 16 * 1024 * 1024; // 16MB (para corresponder ao backend)
+    
+    if (file.size > maxSize) {
+      setErrorMessage('Arquivo muito grande. Máximo permitido: 16MB');
+      return false;
+    }
+    
+    // Simplificando a validação para o nome do arquivo, que é mais confiável
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      setErrorMessage('Apenas arquivos CSV são aceitos');
+      return false;
+    }
+    
+    return true;
+  };
 
-  // Referência para o input de arquivo oculto
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Hook do Next.js para navegação programática
-  const router = useRouter();
-
-  // Função principal para lidar com o clique no botão
-  const handleMainButtonClick = () => {
-    if (!selectedFile) {
-      // Se nenhum arquivo foi selecionado, abre o seletor de arquivos
-      fileInputRef.current?.click();
-    } else {
-      // Se um arquivo já foi selecionado, abre o modal de ajustes
-      setIsModalOpen(true);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      setErrorMessage('');
+      setUploadStatus('idle');
+      
+      if (validateFile(selectedFile)) {
+        setFile(selectedFile);
+      }
     }
   };
 
-  // Função para lidar com a seleção de um arquivo no input oculto
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      const file = files[0];
-      setSelectedFile(file); // Armazena o arquivo selecionado no estado
-      console.log('Arquivo selecionado:', file.name, file.type, file.size);
-      // Aqui você pode adicionar lógica inicial de validação ou pré-processamento do arquivo
-    } else {
-        // Se o usuário cancelou a seleção, reseta o estado do arquivo
-        setSelectedFile(null);
+  const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const droppedFile = e.dataTransfer.files?.[0];
+    if (droppedFile) {
+      setErrorMessage('');
+      setUploadStatus('idle');
+      
+      if (validateFile(droppedFile)) {
+        setFile(droppedFile);
+      }
     }
   };
 
-  // Função para fechar o modal
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    // Opcional: Você pode querer resetar o selectedFile aqui se quiser que o botão
-    // volte a ser "Importar arquivo" depois que o modal é fechado.
-    // setSelectedFile(null);
+  const handleDragOver = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    setIsDragOver(true);
   };
 
-  // Função chamada quando o botão "Confirmar" dentro do modal é clicado
-  // Agora ela recebe os dados processados do modal
-  const handleAnalyzeClick = async (csvContent: string, filters: string[], maxSemester: string) => {
-    setIsModalOpen(false); // Fecha o modal imediatamente para feedback
-
-    if (!csvContent) {
-      alert("Nenhum dado CSV para análise.");
-      return;
+  const handleDragLeave = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragOver(false);
     }
+  };
 
-    // Codifica o conteúdo CSV para Base64 antes de enviar para o backend
-    // `btoa` não lida bem com caracteres Unicode diretamente.
-    // `unescape(encodeURIComponent())` é uma forma comum de contornar isso.
-    const base64CsvContent = btoa(unescape(encodeURIComponent(csvContent)));
+  // ### LÓGICA DE UPLOAD MODIFICADA ###
+  const handleSubmit = async () => {
+    if (!file) return;
+    
+    setIsUploading(true);
+    setUploadStatus('idle');
+    setErrorMessage('');
 
+    const formData = new FormData();
+    formData.append('file', file);
+    
     try {
-      const API_URL = process.env.NEXT_PUBLIC_FLASK_API_URL || 'http://localhost:5000';
-      const ANALYZE_ENDPOINT = `${API_URL}/analyze`;
-
-      const response = await fetch(ANALYZE_ENDPOINT, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
+      const response = await fetch(`${apiUrl}/api/upload`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          fileContent: base64CsvContent, // Envia o conteúdo CSV codificado
-          filters: filters,
-          maxSemester: maxSemester,
-        }),
+        body: formData,
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Falha na análise do backend.');
+        throw new Error(result.error || 'Erro desconhecido no servidor.');
       }
-
-      const resultData = await response.json(); // Recebe as URLs das imagens
-      console.log('Dados da análise recebidos do Flask:', resultData);
-
-      // --- Armazenamento das URLs dos gráficos ---
-      // A melhor forma de passar os dados (URLs dos gráficos) para a
-      // página `/analises-graficos` é através de um estado global (Context API, Zustand, Recoil).
-      // Para este exemplo, vou usar localStorage temporariamente, mas NÃO é o ideal
-      // para dados grandes ou para produção sem considerar segurança.
-      localStorage.setItem('chartImageUrls', JSON.stringify(resultData.image_urls));
-      localStorage.setItem('analysisMessage', resultData.message || 'Análise concluída.');
-
-      // Redireciona para a página de resultados
-      router.push('oraculo/analises-graficos');
+      
+      setUploadStatus('success');
+      console.log('Arquivo enviado com sucesso. ID:', result.fileId);
+      
+      // Redireciona para a página de ajustes após um breve delay
+      setTimeout(() => {
+        router.push(`/ajustes/${result.fileId}`);
+      }, 1500);
 
     } catch (error: any) {
-      console.error('Erro ao enviar dados para o Flask:', error.message);
-      alert(`Erro na análise: ${error.message}`);
-      // Lógica para mostrar erro na UI da página principal
+      setUploadStatus('error');
+      setErrorMessage(error.message || 'Erro ao enviar arquivo. Tente novamente.');
+    } finally {
+      setIsUploading(false);
     }
   };
 
-
-  // Lógica para o texto e visibilidade do ícone do botão
-  const buttonText = selectedFile ? 'Começar' : 'Importar arquivo';
-  const showUploadIcon = !selectedFile; // Ícone visível apenas quando o texto é "Importar arquivo"
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
   return (
-    <>
-      <Header />
-
-      <main className="flex flex-col items-center min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
-        {/* Seção Principal (Introdução) */}
-        <section className="text-center max-w-4xl mx-auto mb-16">
-          <h1 className="text-5xl font-bold text-gray-900 mb-4">Oráculo</h1>
-          <h2 className="text-2xl font-semibold text-gray-800 mb-6">Análise preditiva da evasão universitária.</h2>
-          <p className="text-gray-600 leading-relaxed">
-            A ferramenta Oráculo analisa o impacto da pandemia na evasão universitária. Com isso, compara o comportamento de evasão de alunos em períodos anteriores e durante a pandemia, monitorando seus resultados, buscando identificar mudanças significativas, tendências e fornecer insights valiosos sobre o clima dinâmica.
+    <main className="min-h-screen w-full flex flex-col justify-center items-center bg-gradient-to-br from-blue-50 to-gray-100 p-4">
+      <div className="bg-white p-8 rounded-xl shadow-lg max-w-md w-full">
+        <div className="text-center mb-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-2">
+            Carregar dados estatísticos
+          </h2>
+          <p className="text-sm text-gray-600">
+            Faça upload do seu arquivo CSV para análise
           </p>
-        </section>
+        </div>
 
-        {/* Seção dos Cards de Análise (Gráficos em Grade) */}
-        <section className="w-full px-4 sm:px-6 lg:px-8 max-w-screen-xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
-          <CardAnalise
-            imageSrc="/images/chart-series-temporais.svg"
-            imageAlt="Gráfico de análise de séries temporais"
-            title="Séries temporais"
-            description="Visualização da série temporal dos dados."
-          />
-          <CardAnalise
-            imageSrc="/images/chart-tendencia-sazonalidade.svg"
-            imageAlt="Gráfico de tendências e sazonalidade"
-            title="Tendência e sazonalidade"
-            description="Identificação de padrões recorrentes."
-          />
-          <CardAnalise
-            imageSrc="/images/chart-previsao.svg"
-            imageAlt="Gráfico de previsão de evasão"
-            title="Previsão de evasão"
-            description="Estimar a evasão durante a pandemia com intervalo de confiança robustos."
-          />
-        </section>
-
-        {/* Seção de Blocos de Imagem/Texto (Features) */}
-        <section className="w-full px-4 sm:px-6 lg:px-8 max-w-screen-xl mx-auto mb-16">
-          <FeatureBlock
-            imageSrc="/images/chart-comparacao-pandemia.svg"
-            imageAlt="Gráfico de comparação pré e durante pandemia"
-            title="Comparação pré e durante pandemia"
-            description="Entender o impacto da pandemia nas taxas de evasão, com comparativos entre períodos."
-            reverse={false}
-          />
-          <FeatureBlock
-            imageSrc="/images/chart-analise-campus.svg"
-            imageAlt="Gráfico de análise por campus"
-            title="Análise por campus"
-            description="Visualizar métricas segmentadas por campus e identificar características locais."
-            reverse={true}
-          />
-          <FeatureBlock
-            imageSrc="/images/chart-predicao-valores.svg"
-            imageAlt="Gráfico de predição de valores"
-            title="Predição dos valores"
-            description="Estimar dados futuros com base em padrões passados, usando modelos estatísticos ou algoritmos."
-            reverse={false}
-          />
-        </section>
-
-        {/* Seção: Importação de Dataset - Com a nova funcionalidade */}
-        <section className="w-full px-4 sm:px-6 lg:px-8 max-w-screen-xl mx-auto mb-16 bg-white p-8 rounded-lg shadow-md flex flex-col md:flex-row items-center justify-between">
-          <div className="md:w-3/5 text-center md:text-left mb-6 md:mb-0">
-            <h2 className="text-3xl font-bold text-gray-900 mb-3 border-b-2 border-indigo-600 pb-1 inline-block">
-              Importe seus dataset
-            </h2>
-            <p className="text-gray-600 leading-relaxed text-base">
-              Carregue seu arquivo de dados (CSV ou SQL) para que o Oráculo
-              processe as informações, execute as análises comparativas da
-              evasão (contrastando períodos pré e durante a pandemia) e revele
-              os principais resultados e tendências.
-            </p>
+        <label
+          className={`
+            block border-2 rounded-lg p-8 mb-4 cursor-pointer transition-all duration-200
+            ${isDragOver 
+              ? 'border-blue-500 bg-blue-50' 
+              : file 
+                ? 'border-green-400 bg-green-50' 
+                : 'border-dashed border-gray-300 hover:border-blue-400 hover:bg-gray-50'
+            }
+          `}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+        >
+          <div className="text-center">
+            {file ? (
+              <div className="space-y-2">
+                <FileText className="mx-auto w-8 h-8 text-green-600" />
+                <div>
+                  <p className="font-medium text-gray-700 truncate">
+                    {file.name}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {formatFileSize(file.size)}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Upload className="mx-auto w-8 h-8 text-gray-400" />
+                <div>
+                  <p className="font-semibold text-gray-700">
+                    Arraste o arquivo CSV aqui
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    ou clique para selecionar
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="md:w-2/5 flex justify-center md:justify-end">
-            {/* Input de arquivo oculto */}
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden" // Oculta o input
-              accept=".csv, .sql" // Tipos de arquivo sugeridos
-            />
-            {/* Botão visível que aciona a lógica */}
-            <button
-              onClick={handleMainButtonClick} // Chama a nova função principal do botão
-              className="bg-indigo-700 hover:bg-indigo-800 text-white font-semibold py-4 px-8 rounded-lg flex items-center justify-center transition-colors duration-300 w-full md:w-auto"
-            >
-              {showUploadIcon && <UploadIcon className="mr-2" />} {/* Ícone condicional */}
-              {buttonText} {/* Texto dinâmico */}
-            </button>
-          </div>
-        </section>
-      </main>
+          
+          <input
+            type="file"
+            onChange={handleFileChange}
+            accept=".csv"
+            className="hidden"
+          />
+        </label>
 
-      {/* Renderização condicional do Modal de Ajustes */}
-      {isModalOpen && (
-        <AjustesModal
-          onClose={handleCloseModal}
-          onAnalyze={handleAnalyzeClick} // Passa a função handleAnalyzeClick com os novos parâmetros
-          file={selectedFile} // Passa o objeto File completo para o modal
-        />
-      )}
-    </>
+        {/* Status Messages */}
+        {errorMessage && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+            <p className="text-sm text-red-700">{errorMessage}</p>
+          </div>
+        )}
+
+        {uploadStatus === 'success' && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center space-x-2">
+            <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+            <p className="text-sm text-green-700">Arquivo recebido! Redirecionando...</p>
+          </div>
+        )}
+
+        <button
+          onClick={handleSubmit}
+          disabled={!file || isUploading || uploadStatus === 'success'}
+          className={`
+            w-full py-3 px-4 rounded-lg font-medium transition-all duration-200
+            ${(!file || isUploading || uploadStatus === 'success')
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
+            }
+          `}
+        >
+          {isUploading ? (
+            <div className="flex items-center justify-center space-x-2">
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <span>Enviando...</span>
+            </div>
+          ) : uploadStatus === 'success' ? (
+            'Redirecionando...'
+          ) : (
+            'Enviar e analisar'
+          )}
+        </button>
+
+        <div className="mt-4 text-center">
+          <p className="text-xs text-gray-500">
+            Aceitamos apenas arquivos CSV (máximo 16MB)
+          </p>
+        </div>
+      </div>
+    </main>
   );
-};
-
-export default OraculoHomePage;
-
+}
