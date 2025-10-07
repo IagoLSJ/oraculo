@@ -100,7 +100,7 @@ export default function UploadPage() {
         router.push(`/ajustes/${result.fileId}`);
       }, 1500);
 
-    } catch (error: any) {
+    } catch (error) {
       setUploadStatus('error');
       setErrorMessage(error.message || 'Erro ao enviar arquivo. Tente novamente.');
     } finally {

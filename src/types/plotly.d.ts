@@ -2,8 +2,8 @@ import { Component } from 'react';
 
 declare module 'react-plotly.js' {
     interface PlotData {
-        x?: any;
-        y?: any;
+        x?: string | number | number[];
+        y?: string | number | number[];
         type: 'scatter' | 'bar' | 'line' | 'scatter3d' | 'surface' | 'histogram' | 'box' | 'violin' | 'pie' | 'heatmap' | 'contour' | 'scattergl' | 'scattermapbox' | 'choropleth' | 'scattergeo' | 'scatterpolar' | 'scatterternary' | 'scattercarpet' | 'scattercone' | 'scatterstreamtube' | 'scattervolume' | 'scattermesh3d';
         mode?: 'lines' | 'markers' | 'lines+markers' | 'text' | 'text+lines' | 'text+markers' | 'text+lines+markers' | 'none';
         name?: string;
