@@ -627,11 +627,11 @@ const ResultadosPage = () => {
                       paper_bgcolor: "rgba(0,0,0,0)",
                       plot_bgcolor: "rgba(0,0,0,0)",
                       yaxis: {
-                        title: "Taxa de Evasão (%)",
+                        title: {text:"Taxa de Evasão (%)"},
                         gridcolor: "#f3f4f6",
                       },
                       xaxis: {
-                        title: "Período (Semestres)",
+                        title: {text:"Período (Semestres)"},
                         gridcolor: "#f3f4f6",
                       },
                       legend: {
@@ -726,12 +726,12 @@ const ResultadosPage = () => {
                           paper_bgcolor: "rgba(0,0,0,0)",
                           plot_bgcolor: "rgba(0,0,0,0)",
                           yaxis: {
-                            title: "Correlação",
+                            title: {text:"Correlação"},
                             range: [-1, 1],
                             gridcolor: "#f3f4f6",
                           },
                           xaxis: {
-                            title: "Lags (Semestres)",
+                            title: {text:"Lags (Semestres)"},
                             gridcolor: "#f3f4f6",
                           },
                           showlegend: true,
@@ -798,12 +798,12 @@ const ResultadosPage = () => {
                           paper_bgcolor: "rgba(0,0,0,0)",
                           plot_bgcolor: "rgba(0,0,0,0)",
                           yaxis: {
-                            title: "Correlação",
+                            title: {text:"Correlação"},
                             range: [-1, 1],
                             gridcolor: "#f3f4f6",
                           },
                           xaxis: {
-                            title: "Lags (Semestres)",
+                            title: {text:"Lags (Semestres)"},
                             gridcolor: "#f3f4f6",
                           },
                           showlegend: true,
