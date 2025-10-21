@@ -35,7 +35,7 @@ const Plot = dynamic(() => import("react-plotly.js"), {
 
 // Define a interface para os dados de decomposição
 interface DecompositionData {
-  trend?: { x: string[]; y: number[] };
+  trend?: { x: string[]; y: number[], shape: [{type: 'line', x0:'2020.1', x1:'2020.1', y0:0, y1:1, line: {color: 'red', width: 2, dash: 'dot'}}] };
   original: { x: string[]; y: number[] };
   seasonal: { x: string[]; y: number[] };
   residual: { x: string[]; y: number[] };
