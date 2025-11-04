@@ -35,7 +35,7 @@ const Plot = dynamic(() => import("react-plotly.js"), {
 
 // Define a interface para os dados de decomposição
 interface DecompositionData {
-  trend?: { x: string[]; y: number[], shape: [{type: 'line', x0:'2020.1', x1:'2020.1', y0:0, y1:1, line: {color: 'red', width: 2, dash: 'dot'}}] };
+  trend?: { x: string[]; y: number[] };
   original: { x: string[]; y: number[] };
   seasonal: { x: string[]; y: number[] };
   residual: { x: string[]; y: number[] };
@@ -47,10 +47,12 @@ const DecompositionChart = memo(
     data,
     isLoading,
     error,
+    splitDate, // Prop para a linha vertical
   }: {
     data?: DecompositionData;
     isLoading?: boolean;
     error?: string | null;
+    splitDate?: string | null; // <-- CORRIGIDO: Deve ser string, não number
   }) => {
     // Estado de loading
     if (isLoading) {
@@ -106,6 +108,7 @@ const DecompositionChart = memo(
       );
     }
 
+    // *** CORREÇÃO: Definição dos traces limpa ***
     const traces = [
       {
         x: data.original.x,
@@ -114,7 +117,7 @@ const DecompositionChart = memo(
         mode: "lines" as const,
         name: "Série Original",
         line: { color: "#1f77b4", width: 2 },
-        xaxis: "x",
+        xaxis: "x", // Define que este trace usa o eixo 'x' e 'y'
         yaxis: "y",
       },
       {
@@ -124,7 +127,7 @@ const DecompositionChart = memo(
         mode: "lines" as const,
         name: "Tendência",
         line: { color: "#ff7f0e", width: 2 },
-        xaxis: "x2",
+        xaxis: "x2", // Define que este trace usa o eixo 'x2' e 'y2'
         yaxis: "y2",
       },
       {
@@ -134,7 +137,7 @@ const DecompositionChart = memo(
         mode: "lines" as const,
         name: "Sazonalidade",
         line: { color: "#2ca02c", width: 2 },
-        xaxis: "x3",
+        xaxis: "x3", // Define que este trace usa o eixo 'x3' e 'y3'
         yaxis: "y3",
       },
       {
@@ -144,11 +147,34 @@ const DecompositionChart = memo(
         mode: "lines" as const,
         name: "Resíduo",
         line: { color: "#d62728", width: 2 },
-        xaxis: "x4",
+        xaxis: "x4", // Define que este trace usa o eixo 'x4' e 'y4'
         yaxis: "y4",
       },
     ];
 
+    // Define as linhas verticais (shapes) se splitDate existir
+    const verticalLineStyle = {
+      type: "line" as const,
+      yref: "paper" as const,
+      y0: 0,
+      y1: 1,
+      line: {
+        color: "red",
+        width: 2,
+        dash: "dot" as const,
+      },
+    };
+
+    const shapes = splitDate
+      ? [
+          { ...verticalLineStyle, xref: "x", x0: splitDate, x1: splitDate },
+          { ...verticalLineStyle, xref: "x2", x0: splitDate, x1: splitDate },
+          { ...verticalLineStyle, xref: "x3", x0: splitDate, x1: splitDate },
+          { ...verticalLineStyle, xref: "x4", x0: splitDate, x1: splitDate },
+        ]
+      : [];
+
+    // *** CORREÇÃO: Layout restaurado para a versão correta ***
     const layout = {
       title: {
         text: "Decomposição da Série Temporal",
@@ -167,14 +193,16 @@ const DecompositionChart = memo(
         columns: 1,
         subplots: [["xy"], ["x2y2"], ["x3y3"], ["x4y4"]],
         roworder: "top to bottom",
+        shared_xaxes: true, // <-- ESSENCIAL: Sincroniza os eixos X
       },
       height: 450,
       margin: { l: 60, r: 120, t: 60, b: 60 },
+      shapes: shapes, // Adiciona a propriedade 'shapes' ao layout
 
       // Configurações do primeiro subplot (Série Original)
       xaxis: {
         title: "",
-        showticklabels: false,
+        showticklabels: false, // Oculta ticks
         gridcolor: "#e0e0e0",
       },
       yaxis: {
@@ -186,8 +214,9 @@ const DecompositionChart = memo(
       // Configurações do segundo subplot (Tendência)
       xaxis2: {
         title: "",
-        showticklabels: false,
+        showticklabels: false, // Oculta ticks
         gridcolor: "#e0e0e0",
+        matches: "x", // <-- ESSENCIAL: Vincula ao eixo 'x'
       },
       yaxis2: {
         title: "Tendência",
@@ -198,8 +227,9 @@ const DecompositionChart = memo(
       // Configurações do terceiro subplot (Sazonalidade)
       xaxis3: {
         title: "",
-        showticklabels: false,
+        showticklabels: false, // Oculta ticks
         gridcolor: "#e0e0e0",
+        matches: "x", // <-- ESSENCIAL: Vincula ao eixo 'x'
       },
       yaxis3: {
         title: "Sazonalidade",
@@ -211,7 +241,10 @@ const DecompositionChart = memo(
       xaxis4: {
         title: "Data",
         titlefont: { size: 12 },
+        showticklabels: true, // <-- ESSENCIAL: Mostra os ticks SÓ no último
         gridcolor: "#e0e0e0",
+        matches: "x", // <-- ESSENCIAL: Vincula ao eixo 'x'
+        type: "date", // <-- ESSENCIAL: Trata o eixo como data
       },
       yaxis4: {
         title: "Resíduo",
@@ -233,13 +266,15 @@ const DecompositionChart = memo(
           <CardTitle>Decomposição da Série Temporal</CardTitle>
         </CardHeader>
         <CardContent className="h-[450px] w-full">
-          <Plot
-            data={traces}
-            layout={layout as unknown as Partial<Plotly.Layout>}
-            config={config as Partial<Plotly.Config>}
-            useResizeHandler={true}
-            className="w-full h-full"
-          />
+          <Suspense fallback={<div className="flex items-center justify-center h-full"><span className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></span></div>}>
+            <Plot
+              data={traces}
+              layout={layout as unknown as Partial<Plotly.Layout>}
+              config={config as Partial<Plotly.Config>}
+              useResizeHandler={true}
+              className="w-full h-full"
+            />
+          </Suspense>
         </CardContent>
       </Card>
     );
@@ -250,8 +285,9 @@ DecompositionChart.displayName = "DecompositionChart";
 
 // --- Fim do Componente DecompositionChart ---
 
-// Interface para tipagem dos dados da análise
+// *** CORREÇÃO: Interface de resultados ***
 interface AnalysisResults {
+  analysis_id: string;
   forecast?: {
     mape?: number;
     forecast_y: number[];
@@ -265,6 +301,9 @@ interface AnalysisResults {
   };
   statistics?: {
     mean: number;
+    std: number;
+    min: number;
+    max: number;
     trend: number;
   };
   decomposition?: DecompositionData;
@@ -275,6 +314,7 @@ interface AnalysisResults {
     pacf: number[];
     pacf_confidence_upper: number[];
   };
+  // split_date: string; // <-- REMOVIDO: Este campo não vem da API
 }
 
 // Interface para os ícones do Lucide React
@@ -284,14 +324,6 @@ interface IconProps {
 
 // Tipagem correta para o ícone
 type IconComponent = React.ComponentType<IconProps>;
-
-// Componente de carregamento para os gráficos Plotly
-const PlotLoading = () => (
-  <div className="flex items-center justify-center h-full">
-    <RefreshCw className="w-8 h-8 animate-spin text-blue-600 mr-3" />
-    <span className="text-lg">Carregando gráfico...</span>
-  </div>
-);
 
 // Componente memoizado de Spinner de Carregamento para melhor desempenho
 const LoadingSpinner = memo(() => (
@@ -318,7 +350,7 @@ const ErrorDisplay = memo(
         <h1 className="text-2xl font-bold mb-4 text-gray-800">
           Erro ao Carregar Resultados
         </h1>
-        <Alert className="mb-4">
+        <Alert className="mb-4 !border-red-400 !bg-red-50 !text-red-800">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
         <div className="flex gap-3 justify-center">
@@ -390,8 +422,18 @@ const useAnalysisData = () => {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    setResults(JSON.parse(localStorage.getItem("analysisResults") || "null"));
-    setIsLoading(false);
+    try {
+      const storedData = localStorage.getItem("analysisResults");
+      if (!storedData) {
+        throw new Error("Nenhum resultado de análise encontrado no armazenamento local.");
+      }
+      setResults(JSON.parse(storedData));
+    } catch (err: any) {
+        setError(err.message || "Falha ao carregar dados. Tente gerar a análise novamente.");
+        setResults(null);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -453,7 +495,7 @@ const ResultadosPage = () => {
       kpis.push({
         title: "Taxa de Evasão Média",
         value: `${results.statistics.mean.toFixed(2)}%`,
-        subtitle: "No período de treino",
+        subtitle: "Em todo o período", // Corrigido (usa dados completos)
         icon: Target,
         trend: (results.statistics.mean <= 10
           ? "positive"
@@ -485,7 +527,7 @@ const ResultadosPage = () => {
         value: `${isIncreasing ? "↑" : "↓"} ${Math.abs(
           results.statistics.trend
         ).toFixed(2)}%`,
-        subtitle: "Variação no período de treino",
+        subtitle: "Variação em todo o período", // Corrigido (usa dados completos)
         icon: TrendingUp,
         trend: (isIncreasing ? "negative" : "positive") as
           | "positive"
@@ -496,6 +538,24 @@ const ResultadosPage = () => {
 
     return kpis;
   }, [results, formatSemesterDate, isValidNumber]);
+
+  // *** CORREÇÃO: Lógica do splitDate restaurada ***
+  // Calcula a data de separação (último ponto do treino)
+  const splitDate = useMemo(() => {
+    if (
+      results?.forecast?.original_x &&
+      results.forecast.original_x.length > 0 &&
+      results.forecast.test_x && // Verifica se existe um array de teste
+      results.forecast.test_x.length > 0 // Verifica se o array de teste não está vazio
+    ) {
+      // Retorna a última data do array de treino
+      return results.forecast.original_x[
+        results.forecast.original_x.length - 1
+      ];
+    }
+    // Retorna null se não houver dados de teste (sem separação)
+    return null;
+  }, [results]);
 
   // Lida com os estados de carregamento e erro
   if (isLoading) return <LoadingSpinner />;
@@ -523,7 +583,10 @@ const ResultadosPage = () => {
               <ArrowLeft className="w-4 h-4 mr-2" />
               Voltar
             </Button>
-            <Button onClick={handleDownloadReport}>Baixar Relatório</Button>
+            <Button onClick={handleDownloadReport}>
+              <Download className="w-4 h-4 mr-2" />
+              Baixar Relatório
+            </Button>
           </div>
         </div>
 
@@ -565,7 +628,7 @@ const ResultadosPage = () => {
             </CardHeader>
             <CardContent className="h-[500px]">
               {results.forecast ? (
-                <Suspense fallback={<PlotLoading />}>
+                <Suspense fallback={<div className="flex items-center justify-center h-full w-full"><span>Carregando gráfico...</span></div>}>
                   <Plot
                     data={[
                       {
@@ -627,11 +690,11 @@ const ResultadosPage = () => {
                       paper_bgcolor: "rgba(0,0,0,0)",
                       plot_bgcolor: "rgba(0,0,0,0)",
                       yaxis: {
-                        title: {text:"Taxa de Evasão (%)"},
+                        title: { text: "Taxa de Evasão (%)" },
                         gridcolor: "#f3f4f6",
                       },
                       xaxis: {
-                        title: {text:"Período (Semestres)"},
+                        title: { text: "Período (Semestres)" },
                         gridcolor: "#f3f4f6",
                       },
                       legend: {
@@ -676,6 +739,7 @@ const ResultadosPage = () => {
                 data={results?.decomposition}
                 isLoading={isLoading}
                 error={error}
+                splitDate={splitDate} // <-- CORREÇÃO: Passando o splitDate calculado
               />
             </div>
 
@@ -687,7 +751,7 @@ const ResultadosPage = () => {
                     <CardTitle>Função de Autocorrelação (ACF)</CardTitle>
                   </CardHeader>
                   <CardContent className="h-[450px]">
-                    <Suspense fallback={<PlotLoading />}>
+                    <Suspense fallback={<div className="flex justify-center items-center h-full text-gray-400">Carregando gráfico...</div>}>
                       <Plot
                         data={[
                           {
@@ -726,12 +790,12 @@ const ResultadosPage = () => {
                           paper_bgcolor: "rgba(0,0,0,0)",
                           plot_bgcolor: "rgba(0,0,0,0)",
                           yaxis: {
-                            title: {text:"Correlação"},
+                            title: { text: "Correlação" },
                             range: [-1, 1],
                             gridcolor: "#f3f4f6",
                           },
                           xaxis: {
-                            title: {text:"Lags (Semestres)"},
+                            title: { text: "Lags (Semestres)" },
                             gridcolor: "#f3f4f6",
                           },
                           showlegend: true,
@@ -759,7 +823,7 @@ const ResultadosPage = () => {
                     <CardTitle>Função de Autocorrelação (PACF)</CardTitle>
                   </CardHeader>
                   <CardContent className="h-[450px]">
-                    <Suspense fallback={<PlotLoading />}>
+                    <Suspense fallback={<div>Carregando gráfico...</div>}>
                       <Plot
                         data={[
                           {
@@ -798,12 +862,12 @@ const ResultadosPage = () => {
                           paper_bgcolor: "rgba(0,0,0,0)",
                           plot_bgcolor: "rgba(0,0,0,0)",
                           yaxis: {
-                            title: {text:"Correlação"},
+                            title: { text: "Correlação" },
                             range: [-1, 1],
                             gridcolor: "#f3f4f6",
                           },
                           xaxis: {
-                            title: {text:"Lags (Semestres)"},
+                            title: { text: "Lags (Semestres)" },
                             gridcolor: "#f3f4f6",
                           },
                           showlegend: true,

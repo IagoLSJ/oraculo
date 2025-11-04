@@ -109,6 +109,7 @@ export default function AjustesPage({ params }: { params: Promise<{ fileId: stri
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Erro na análise.');
+      result.split_date = Number(result.split_date);
       localStorage.setItem('analysisResults', JSON.stringify(result));
       router.push('/resultados');
     } catch (error: any) {
@@ -198,7 +199,12 @@ export default function AjustesPage({ params }: { params: Promise<{ fileId: stri
             <Table>
               <TableHeader>
                 <TableRow>
-                  {gridData.headers.map(header => <TableHead key={header}>{header}</TableHead>)}
+                  <TableHead>Semestre</TableHead>
+                  <TableHead>Unidade Acadêmica</TableHead>
+                  <TableHead>Taxa de Evasão</TableHead>
+                  <TableHead>Taxa de Retenção (Prazo Padrão)</TableHead>
+                  <TableHead>Taxa de Retenção II (Prazo Máximo)</TableHead>
+                  <TableHead>Matrículas</TableHead>
                   <TableHead className="w-[50px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
