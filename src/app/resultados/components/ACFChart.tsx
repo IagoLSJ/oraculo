@@ -4,16 +4,11 @@ import dynamic from 'next/dynamic';
 import { memo } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { AutocorrelationData } from "@/types/analysis";
 
 const Plot = dynamic(() => import('react-plotly.js'), { ssr: false, loading: () => <RefreshCw className="w-8 h-8 animate-spin" /> }) as any;
 
-interface ACFData {
-    lags: number[];
-    acf: number[];
-    acf_confidence_upper: number[];
-}
-
-const ACFChart = memo(({ data }: { data?: ACFData }) => {
+const ACFChart = memo(({ data }: { data?: AutocorrelationData }) => {
     if (!data) return null;
 
     const plotData = [

@@ -10,6 +10,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Trash2, AlertCircle, Loader2 } from "lucide-react";
+import { api } from "@/lib/api/client";
+import { AnalysisPayloadSchema } from "@/lib/validation/schemas";
+import { useAnalysisContext } from "@/contexts/AnalysisContext";
+import type { AnalysisResults } from "@/types/analysis";
+import { Pagination } from "@/components/ui/pagination";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,16 +31,38 @@ import {
 export default function AjustesPage({ params }: { params: Promise<{ fileId: string }> }) {
   const router = useRouter();
   const { fileId } = use(params);
+  const { setResults } = useAnalysisContext();
 
   // --- ESTADOS GLOBAIS DA PÁGINA ---
-  const [initialData, setInitialData] = useState<any>(null);
+  type FileDetails = {
+    unidades: string[];
+    semestres: string[];
+    preview_data: { headers: string[]; rows: string[][] };
+    pagination?: {
+      page: number;
+      page_size: number;
+      total_rows: number;
+      total_pages: number;
+      has_next: boolean;
+      has_previous: boolean;
+    };
+  };
+
+  const [initialData, setInitialData] = useState<FileDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  
+  // --- ESTADOS DE PAGINAÇÃO ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   // --- ESTADOS DE INTERATIVIDADE (Lógica da antiga 'AjustesView') ---
   const [selectedUnidades, setSelectedUnidades] = useState<string[]>([]);
   const [selectedSemestre, setSelectedSemestre] = useState<string>("");
-  const [gridData, setGridData] = useState<{ headers: string[], rows: any[][] } | null>(null);
+  const [gridData, setGridData] = useState<{
+    headers: string[];
+    rows: string[][];
+  } | null>(null);
   const [isValidationAlertOpen, setIsValidationAlertOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState('');
@@ -45,28 +72,29 @@ export default function AjustesPage({ params }: { params: Promise<{ fileId: stri
     const fetchDetails = async () => {
       setIsLoading(true);
       setFetchError(null);
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
       
       try {
-        const response = await fetch(`${apiUrl}/api/files/${fileId}/details`);
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `Erro ${response.status}`);
-        }
-                 const data = await response.json();
+        const data = await api.getFileDetails(fileId, currentPage, pageSize);
          
-         setInitialData(data);
-         setGridData(data.preview_data); // Popula a tabela com os dados recebidos
-             } catch (error: any) {
-         console.error('Erro ao buscar dados:', error);
-         setFetchError(error.message);
-       } finally {
-         setIsLoading(false);
-       }
+        setInitialData(data);
+        setGridData(data.preview_data); // Popula a tabela com os dados recebidos
+        
+        // Atualiza página atual se necessário
+        if (data.pagination && data.pagination.page !== currentPage) {
+          setCurrentPage(data.pagination.page);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar dados:', error);
+        const message =
+          error instanceof Error ? error.message : "Erro ao buscar dados.";
+        setFetchError(message);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     fetchDetails();
-  }, [fileId]); // Roda sempre que o fileId mudar
+  }, [fileId, currentPage, pageSize]); // Roda quando fileId, página ou tamanho da página mudar
 
   // --- FUNÇÕES DE MANIPULAÇÃO DE DADOS ---
   const handleUnidadeChange = (unidade: string) => {
@@ -98,22 +126,26 @@ export default function AjustesPage({ params }: { params: Promise<{ fileId: stri
     }
     setIsAnalyzing(true);
     setAnalysisError('');
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000';
-    const payload = { params: { selectedUnidades, selectedSemestre }, data: gridData };
+    const payload = { 
+      file_id: fileId,
+      params: { selectedUnidades, selectedSemestre }, 
+      data: gridData 
+    };
+    const validation = AnalysisPayloadSchema.safeParse(payload);
+    if (!validation.success) {
+      setAnalysisError(validation.error.errors[0]?.message || "Payload inválido.");
+      setIsAnalyzing(false);
+      return;
+    }
 
     try {
-      const response = await fetch(`${apiUrl}/api/analysis`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Erro na análise.');
-      result.split_date = Number(result.split_date);
-      localStorage.setItem('analysisResults', JSON.stringify(result));
+      const result = (await api.analyze(payload)) as AnalysisResults;
+      setResults(result);
       router.push('/resultados');
-    } catch (error: any) {
-      setAnalysisError(error.message);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Erro na análise.";
+      setAnalysisError(message);
     } finally {
       setIsAnalyzing(false);
     }
@@ -193,7 +225,31 @@ export default function AjustesPage({ params }: { params: Promise<{ fileId: stri
         </Button>
       </div>
       <Card>
-        <CardHeader><CardTitle>Pré-visualização e Edição dos Dados</CardTitle></CardHeader>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Pré-visualização e Edição dos Dados</CardTitle>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-muted-foreground">Itens por página:</label>
+              <Select
+                value={pageSize.toString()}
+                onValueChange={(value) => {
+                  setPageSize(Number(value));
+                  setCurrentPage(1); // Reset para primeira página ao mudar tamanho
+                }}
+              >
+                <SelectTrigger className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                  <SelectItem value="200">200</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
         <CardContent>
           <ScrollArea className="w-full whitespace-nowrap rounded-md border">
             <Table>
@@ -239,6 +295,19 @@ export default function AjustesPage({ params }: { params: Promise<{ fileId: stri
             </Table>
             <div className="h-8" />
           </ScrollArea>
+          
+          {/* Componente de Paginação */}
+          {initialData?.pagination && (
+            <div className="mt-4">
+              <Pagination
+                currentPage={initialData.pagination.page}
+                totalPages={initialData.pagination.total_pages}
+                pageSize={initialData.pagination.page_size}
+                totalRows={initialData.pagination.total_rows}
+                onPageChange={(page) => setCurrentPage(page)}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

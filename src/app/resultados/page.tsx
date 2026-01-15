@@ -1,331 +1,26 @@
 "use client";
 
-import {
-  useEffect,
-  useState,
-  useCallback,
-  useMemo,
-  memo,
-  Suspense,
-} from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState, useCallback, useMemo, memo } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   AlertCircle,
   ArrowLeft,
-  Download,
-  TrendingUp,
-  Target,
   CheckCircle,
   Clock,
-  Frown,
-  RefreshCw,
+  Download,
   Info,
+  RefreshCw,
+  Target,
+  TrendingUp,
 } from "lucide-react";
-import dynamic from "next/dynamic";
+import KPICard from "./components/KPICard";
+import ForecastChart from "./components/ForecastChart";
+import ACFChart from "./components/ACFChart";
+import PACFChart from "./components/PACFChart";
+import DecompositionChart from "./components/DecompositionChart";
+import { useAnalysisContext } from "@/contexts/AnalysisContext";
 
-// Corrigindo a importação dinâmica do Plot com tipagem adequada
-const Plot = dynamic(() => import("react-plotly.js"), {
-  ssr: false,
-  loading: () => <RefreshCw className="w-8 h-8 animate-spin" />,
-});
-
-// --- Início do Componente DecompositionChart ---
-
-// Define a interface para os dados de decomposição
-interface DecompositionData {
-  trend?: { x: string[]; y: number[] };
-  original: { x: string[]; y: number[] };
-  seasonal: { x: string[]; y: number[] };
-  residual: { x: string[]; y: number[] };
-}
-
-// Componente memoizado para o gráfico de decomposição
-const DecompositionChart = memo(
-  ({
-    data,
-    isLoading,
-    error,
-    splitDate, // Prop para a linha vertical
-  }: {
-    data?: DecompositionData;
-    isLoading?: boolean;
-    error?: string | null;
-    splitDate?: string | null; // <-- CORRIGIDO: Deve ser string, não number
-  }) => {
-    // Estado de loading
-    if (isLoading) {
-      return (
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle>Decomposição da Série Temporal</CardTitle>
-          </CardHeader>
-          <CardContent className="h-[450px] w-full flex items-center justify-center">
-            <div className="text-center">
-              <RefreshCw className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
-              <p className="text-lg text-gray-600">
-                Carregando decomposição...
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      );
-    }
-
-    // Estado de erro
-    if (error) {
-      return (
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle>Decomposição da Série Temporal</CardTitle>
-          </CardHeader>
-          <CardContent className="h-[450px] w-full flex items-center justify-center">
-            <div className="text-center text-red-600">
-              <Info className="w-12 h-12 mx-auto mb-4" />
-              <p className="text-lg font-medium mb-2">Erro ao carregar dados</p>
-              <p className="text-sm">{error}</p>
-            </div>
-          </CardContent>
-        </Card>
-      );
-    }
-
-    // Não renderiza se os dados de tendência não existirem
-    if (!data?.trend) {
-      return (
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle>Decomposição da Série Temporal</CardTitle>
-          </CardHeader>
-          <CardContent className="h-[450px] w-full flex items-center justify-center">
-            <div className="text-center text-gray-500">
-              <Info className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-              <p>Dados de decomposição não disponíveis</p>
-            </div>
-          </CardContent>
-        </Card>
-      );
-    }
-
-    // *** CORREÇÃO: Definição dos traces limpa ***
-    const traces = [
-      {
-        x: data.original.x,
-        y: data.original.y,
-        type: "scatter" as const,
-        mode: "lines" as const,
-        name: "Série Original",
-        line: { color: "#1f77b4", width: 2 },
-        xaxis: "x", // Define que este trace usa o eixo 'x' e 'y'
-        yaxis: "y",
-      },
-      {
-        x: data.trend.x,
-        y: data.trend.y,
-        type: "scatter" as const,
-        mode: "lines" as const,
-        name: "Tendência",
-        line: { color: "#ff7f0e", width: 2 },
-        xaxis: "x2", // Define que este trace usa o eixo 'x2' e 'y2'
-        yaxis: "y2",
-      },
-      {
-        x: data.seasonal.x,
-        y: data.seasonal.y,
-        type: "scatter" as const,
-        mode: "lines" as const,
-        name: "Sazonalidade",
-        line: { color: "#2ca02c", width: 2 },
-        xaxis: "x3", // Define que este trace usa o eixo 'x3' e 'y3'
-        yaxis: "y3",
-      },
-      {
-        x: data.residual.x,
-        y: data.residual.y,
-        type: "scatter" as const,
-        mode: "lines" as const,
-        name: "Resíduo",
-        line: { color: "#d62728", width: 2 },
-        xaxis: "x4", // Define que este trace usa o eixo 'x4' e 'y4'
-        yaxis: "y4",
-      },
-    ];
-
-    // Define as linhas verticais (shapes) se splitDate existir
-    const verticalLineStyle = {
-      type: "line" as const,
-      yref: "paper" as const,
-      y0: 0,
-      y1: 1,
-      line: {
-        color: "red",
-        width: 2,
-        dash: "dot" as const,
-      },
-    };
-
-    const shapes = splitDate
-      ? [
-          { ...verticalLineStyle, xref: "x", x0: splitDate, x1: splitDate },
-          { ...verticalLineStyle, xref: "x2", x0: splitDate, x1: splitDate },
-          { ...verticalLineStyle, xref: "x3", x0: splitDate, x1: splitDate },
-          { ...verticalLineStyle, xref: "x4", x0: splitDate, x1: splitDate },
-        ]
-      : [];
-
-    // *** CORREÇÃO: Layout restaurado para a versão correta ***
-    const layout = {
-      title: {
-        text: "Decomposição da Série Temporal",
-        font: { size: 18, color: "#2c3e50" },
-      },
-      showlegend: true,
-      legend: {
-        x: 1.02,
-        y: 1,
-        bgcolor: "rgba(255,255,255,0.8)",
-        bordercolor: "#ccc",
-        borderwidth: 1,
-      },
-      grid: {
-        rows: 4,
-        columns: 1,
-        subplots: [["xy"], ["x2y2"], ["x3y3"], ["x4y4"]],
-        roworder: "top to bottom",
-        shared_xaxes: true, // <-- ESSENCIAL: Sincroniza os eixos X
-      },
-      height: 450,
-      margin: { l: 60, r: 120, t: 60, b: 60 },
-      shapes: shapes, // Adiciona a propriedade 'shapes' ao layout
-
-      // Configurações do primeiro subplot (Série Original)
-      xaxis: {
-        title: "",
-        showticklabels: false, // Oculta ticks
-        gridcolor: "#e0e0e0",
-      },
-      yaxis: {
-        title: "Série Original",
-        titlefont: { size: 12 },
-        gridcolor: "#e0e0e0",
-      },
-
-      // Configurações do segundo subplot (Tendência)
-      xaxis2: {
-        title: "",
-        showticklabels: false, // Oculta ticks
-        gridcolor: "#e0e0e0",
-        matches: "x", // <-- ESSENCIAL: Vincula ao eixo 'x'
-      },
-      yaxis2: {
-        title: "Tendência",
-        titlefont: { size: 12 },
-        gridcolor: "#e0e0e0",
-      },
-
-      // Configurações do terceiro subplot (Sazonalidade)
-      xaxis3: {
-        title: "",
-        showticklabels: false, // Oculta ticks
-        gridcolor: "#e0e0e0",
-        matches: "x", // <-- ESSENCIAL: Vincula ao eixo 'x'
-      },
-      yaxis3: {
-        title: "Sazonalidade",
-        titlefont: { size: 12 },
-        gridcolor: "#e0e0e0",
-      },
-
-      // Configurações do quarto subplot (Resíduo)
-      xaxis4: {
-        title: "Data",
-        titlefont: { size: 12 },
-        showticklabels: true, // <-- ESSENCIAL: Mostra os ticks SÓ no último
-        gridcolor: "#e0e0e0",
-        matches: "x", // <-- ESSENCIAL: Vincula ao eixo 'x'
-        type: "date", // <-- ESSENCIAL: Trata o eixo como data
-      },
-      yaxis4: {
-        title: "Resíduo",
-        titlefont: { size: 12 },
-        gridcolor: "#e0e0e0",
-      },
-    };
-
-    const config = {
-      responsive: true,
-      displayModeBar: true,
-      modeBarButtonsToRemove: ["pan2d", "lasso2d", "select2d"],
-      displaylogo: false,
-    };
-
-    return (
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle>Decomposição da Série Temporal</CardTitle>
-        </CardHeader>
-        <CardContent className="h-[450px] w-full">
-          <Suspense fallback={<div className="flex items-center justify-center h-full"><span className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></span></div>}>
-            <Plot
-              data={traces}
-              layout={layout as unknown as Partial<Plotly.Layout>}
-              config={config as Partial<Plotly.Config>}
-              useResizeHandler={true}
-              className="w-full h-full"
-            />
-          </Suspense>
-        </CardContent>
-      </Card>
-    );
-  }
-);
-
-DecompositionChart.displayName = "DecompositionChart";
-
-// --- Fim do Componente DecompositionChart ---
-
-// *** CORREÇÃO: Interface de resultados ***
-interface AnalysisResults {
-  analysis_id: string;
-  forecast?: {
-    mape?: number;
-    forecast_y: number[];
-    forecast_x: string[];
-    original_x: string[];
-    original_y: number[];
-    test_x?: string[];
-    test_y?: number[];
-    forecast_ci_lower: number[];
-    forecast_ci_upper: number[];
-  };
-  statistics?: {
-    mean: number;
-    std: number;
-    min: number;
-    max: number;
-    trend: number;
-  };
-  decomposition?: DecompositionData;
-  autocorrelation?: {
-    lags: number[];
-    acf: number[];
-    acf_confidence_upper: number[];
-    pacf: number[];
-    pacf_confidence_upper: number[];
-  };
-  // split_date: string; // <-- REMOVIDO: Este campo não vem da API
-}
-
-// Interface para os ícones do Lucide React
-interface IconProps {
-  className?: string;
-}
-
-// Tipagem correta para o ícone
-type IconComponent = React.ComponentType<IconProps>;
-
-// Componente memoizado de Spinner de Carregamento para melhor desempenho
 const LoadingSpinner = memo(() => (
   <div className="flex items-center justify-center min-h-screen">
     <div className="text-center">
@@ -341,7 +36,6 @@ const LoadingSpinner = memo(() => (
 ));
 LoadingSpinner.displayName = "LoadingSpinner";
 
-// Componente memoizado de Exibição de Erro para melhor desempenho
 const ErrorDisplay = memo(
   ({ error, onRetry }: { error: string; onRetry: () => void }) => (
     <div className="container mx-auto p-8 flex flex-col items-center justify-center min-h-screen max-w-md">
@@ -369,72 +63,29 @@ const ErrorDisplay = memo(
 );
 ErrorDisplay.displayName = "ErrorDisplay";
 
-// Componente memoizado de Cartão de KPI para melhor desempenho
-const KPICard = memo(
-  ({
-    title,
-    value,
-    subtitle,
-    icon: Icon,
-    trend,
-  }: {
-    title: string;
-    value: string;
-    subtitle: string;
-    icon: IconComponent;
-    trend?: "positive" | "negative" | "neutral";
-  }) => {
-    const getTrendColor = () => {
-      switch (trend) {
-        case "positive":
-          return "text-green-600";
-        case "negative":
-          return "text-red-600";
-        default:
-          return "text-gray-600";
-      }
-    };
-
-    return (
-      <Card className="transition-all duration-200 hover:shadow-md">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium text-gray-600">
-            {title}
-          </CardTitle>
-          <Icon className="h-5 w-5 text-gray-500" />
-        </CardHeader>
-        <CardContent>
-          <div className={`text-2xl font-bold ${getTrendColor()}`}>{value}</div>
-          <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
-        </CardContent>
-      </Card>
-    );
-  }
-);
-KPICard.displayName = "KPICard";
-
-// Hook personalizado para gerenciar a busca e o estado dos dados da análise
 const useAnalysisData = () => {
-  const [results, setResults] = useState<AnalysisResults | null>(null);
+  const { results, loadFromStorage } = useAnalysisContext();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(() => {
     setIsLoading(true);
     setError(null);
     try {
-      const storedData = localStorage.getItem("analysisResults");
-      if (!storedData) {
-        throw new Error("Nenhum resultado de análise encontrado no armazenamento local.");
+      const stored = results ?? loadFromStorage();
+      if (!stored) {
+        throw new Error("Nenhum resultado de análise encontrado.");
       }
-      setResults(JSON.parse(storedData));
-    } catch (err: any) {
-        setError(err.message || "Falha ao carregar dados. Tente gerar a análise novamente.");
-        setResults(null);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Falha ao carregar dados. Tente novamente.";
+      setError(message);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [results, loadFromStorage]);
 
   useEffect(() => {
     loadData();
@@ -443,7 +94,6 @@ const useAnalysisData = () => {
   return { results, error, isLoading, retryLoad: loadData };
 };
 
-// Componente principal da página
 const ResultadosPage = () => {
   const { results, error, isLoading, retryLoad } = useAnalysisData();
 
@@ -466,12 +116,11 @@ const ResultadosPage = () => {
     }
   }, []);
 
-  const handleDownloadReport = useCallback(async () => {
+  const handleDownloadReport = useCallback(() => {
     if (!results) return;
     window.print();
   }, [results]);
 
-  // Memoiza os dados do KPI para evitar recálculo a cada renderização
   const kpiData = useMemo(() => {
     if (!results) return [];
     const kpis = [];
@@ -495,7 +144,7 @@ const ResultadosPage = () => {
       kpis.push({
         title: "Taxa de Evasão Média",
         value: `${results.statistics.mean.toFixed(2)}%`,
-        subtitle: "Em todo o período", // Corrigido (usa dados completos)
+        subtitle: "Em todo o período",
         icon: Target,
         trend: (results.statistics.mean <= 10
           ? "positive"
@@ -527,7 +176,7 @@ const ResultadosPage = () => {
         value: `${isIncreasing ? "↑" : "↓"} ${Math.abs(
           results.statistics.trend
         ).toFixed(2)}%`,
-        subtitle: "Variação em todo o período", // Corrigido (usa dados completos)
+        subtitle: "Variação em todo o período",
         icon: TrendingUp,
         trend: (isIncreasing ? "negative" : "positive") as
           | "positive"
@@ -539,29 +188,23 @@ const ResultadosPage = () => {
     return kpis;
   }, [results, formatSemesterDate, isValidNumber]);
 
-  // *** CORREÇÃO: Lógica do splitDate restaurada ***
-  // Calcula a data de separação (último ponto do treino)
   const splitDate = useMemo(() => {
     if (
       results?.forecast?.original_x &&
       results.forecast.original_x.length > 0 &&
-      results.forecast.test_x && // Verifica se existe um array de teste
-      results.forecast.test_x.length > 0 // Verifica se o array de teste não está vazio
+      results.forecast.test_x &&
+      results.forecast.test_x.length > 0
     ) {
-      // Retorna a última data do array de treino
       return results.forecast.original_x[
         results.forecast.original_x.length - 1
       ];
     }
-    // Retorna null se não houver dados de teste (sem separação)
     return null;
   }, [results]);
 
-  // Lida com os estados de carregamento e erro
   if (isLoading) return <LoadingSpinner />;
   if (error) return <ErrorDisplay error={error} onRetry={retryLoad} />;
-  if (!results)
-    return <ErrorDisplay error="Nenhum dado disponível" onRetry={retryLoad} />;
+  if (!results) return <LoadingSpinner />;
 
   return (
     <main
@@ -602,7 +245,6 @@ const ResultadosPage = () => {
       </header>
 
       <div className="space-y-8">
-        {/* Seção de KPIs */}
         <section>
           <h2 className="text-xl font-semibold mb-4 text-gray-800">
             Indicadores Principais
@@ -614,277 +256,34 @@ const ResultadosPage = () => {
           </div>
         </section>
 
-        {/* Seção do Gráfico Principal de Previsão */}
         <section>
           <h2 className="text-xl font-semibold mb-4 text-gray-800">
             Análise Temporal
           </h2>
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5" />
-                Predição vs. Dados Reais
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="h-[500px]">
-              {results.forecast ? (
-                <Suspense fallback={<div className="flex items-center justify-center h-full w-full"><span>Carregando gráfico...</span></div>}>
-                  <Plot
-                    data={[
-                      {
-                        x: results.forecast.original_x,
-                        y: results.forecast.original_y,
-                        type: "scatter" as const,
-                        mode: "lines+markers" as const,
-                        name: "Dados de Treino",
-                        line: { color: "#2563eb", width: 2 },
-                        marker: { size: 4 },
-                      },
-                      ...(results.forecast.test_y &&
-                      results.forecast.test_y.length > 0 &&
-                      results.forecast.test_x
-                        ? [
-                            {
-                              x: results.forecast.test_x,
-                              y: results.forecast.test_y,
-                              type: "scatter" as const,
-                              mode: "lines+markers" as const,
-                              name: "Dados de Teste",
-                              line: { color: "#059669", width: 2 },
-                              marker: { size: 4 },
-                            },
-                          ]
-                        : []),
-                      {
-                        x: results.forecast.forecast_x,
-                        y: results.forecast.forecast_y,
-                        type: "scatter" as const,
-                        mode: "lines+markers" as const,
-                        name: "Previsão",
-                        line: { color: "#dc2626", width: 2, dash: "dot" },
-                        marker: { size: 6 },
-                      },
-                      {
-                        x: results.forecast.forecast_x,
-                        y: results.forecast.forecast_ci_lower,
-                        type: "scatter" as const,
-                        mode: "lines" as const,
-                        line: { width: 0 },
-                        hoverinfo: "none",
-                        showlegend: false,
-                      },
-                      {
-                        x: results.forecast.forecast_x,
-                        y: results.forecast.forecast_ci_upper,
-                        type: "scatter" as const,
-                        mode: "lines" as const,
-                        fill: "tonexty",
-                        fillcolor: "rgba(220, 38, 38, 0.1)",
-                        line: { width: 0 },
-                        hoverinfo: "none",
-                        name: "Intervalo de Confiança (95%)",
-                      },
-                    ]}
-                    layout={{
-                      autosize: true,
-                      paper_bgcolor: "rgba(0,0,0,0)",
-                      plot_bgcolor: "rgba(0,0,0,0)",
-                      yaxis: {
-                        title: { text: "Taxa de Evasão (%)" },
-                        gridcolor: "#f3f4f6",
-                      },
-                      xaxis: {
-                        title: { text: "Período (Semestres)" },
-                        gridcolor: "#f3f4f6",
-                      },
-                      legend: {
-                        x: 0.02,
-                        y: 0.98,
-                        bgcolor: "rgba(255,255,255,0.8)",
-                      },
-                      hovermode: "x unified",
-                      margin: { t: 20, r: 20, b: 60, l: 60 },
-                    }}
-                    useResizeHandler={true}
-                    className="w-full h-full"
-                    config={{ displayModeBar: true, responsive: true }}
-                  />
-                </Suspense>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-gray-500 bg-gray-50 rounded-lg">
-                  <Frown className="w-16 h-16 mb-4" />
-                  <p className="font-medium text-lg mb-2">
-                    Previsão Indisponível
-                  </p>
-                  <p className="text-sm text-center max-w-md">
-                    Não foi possível gerar a previsão. Isso pode ocorrer quando
-                    há poucos dados históricos ou quando os dados não apresentam
-                    padrões suficientes para modelagem.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <ForecastChart data={results.forecast} />
         </section>
 
-        {/* Seção de Análise Avançada */}
         <section>
           <h2 className="text-xl font-semibold mb-4 text-gray-800">
             Análise Avançada
           </h2>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {/* Gráfico de Decomposição */}
             <div className="xl:col-span-2">
               <DecompositionChart
-                data={results?.decomposition}
+                data={results.decomposition}
                 isLoading={isLoading}
                 error={error}
-                splitDate={splitDate} // <-- CORREÇÃO: Passando o splitDate calculado
+                splitDate={splitDate}
               />
             </div>
-
             <div className="xl:col-span-2">
-              {/* Gráfico de Autocorrelação */}
               {results.autocorrelation && (
-                <Card className="shadow-sm">
-                  <CardHeader>
-                    <CardTitle>Função de Autocorrelação (ACF)</CardTitle>
-                  </CardHeader>
-                  <CardContent className="h-[450px]">
-                    <Suspense fallback={<div className="flex justify-center items-center h-full text-gray-400">Carregando gráfico...</div>}>
-                      <Plot
-                        data={[
-                          {
-                            x: results.autocorrelation.lags,
-                            y: results.autocorrelation.acf_confidence_upper.map(
-                              (val: number) => -val
-                            ),
-                            type: "scatter" as const,
-                            mode: "lines" as const,
-                            line: { width: 0 },
-                            hoverinfo: "none",
-                            showlegend: false,
-                          },
-                          {
-                            x: results.autocorrelation.lags,
-                            y: results.autocorrelation.acf_confidence_upper,
-                            type: "scatter" as const,
-                            mode: "lines" as const,
-                            fill: "tonexty",
-                            fillcolor: "rgba(59, 130, 246, 0.15)",
-                            line: { width: 0 },
-                            hoverinfo: "none",
-                            name: "Intervalo de Confiança",
-                          },
-                          {
-                            x: results.autocorrelation.lags,
-                            y: results.autocorrelation.acf,
-                            type: "bar" as const,
-                            width: 0.05,
-                            name: "ACF",
-                            marker: { color: "#2563eb" },
-                          },
-                        ]}
-                        layout={{
-                          autosize: true,
-                          paper_bgcolor: "rgba(0,0,0,0)",
-                          plot_bgcolor: "rgba(0,0,0,0)",
-                          yaxis: {
-                            title: { text: "Correlação" },
-                            range: [-1, 1],
-                            gridcolor: "#f3f4f6",
-                          },
-                          xaxis: {
-                            title: { text: "Lags (Semestres)" },
-                            gridcolor: "#f3f4f6",
-                          },
-                          showlegend: true,
-                          legend: {
-                            x: 0.02,
-                            y: 0.98,
-                            bgcolor: "rgba(255,255,255,0.8)",
-                          },
-                          margin: { t: 20, r: 20, b: 60, l: 60 },
-                        }}
-                        useResizeHandler={true}
-                        className="w-full h-full"
-                        config={{ displayModeBar: false, responsive: true }}
-                      />
-                    </Suspense>
-                  </CardContent>
-                </Card>
+                <ACFChart data={results.autocorrelation} />
               )}
             </div>
             <div className="xl:col-span-2">
-              {/* Função de Autocorrelação (PACF) */}
               {results.autocorrelation && (
-                <Card className="shadow-sm">
-                  <CardHeader>
-                    <CardTitle>Função de Autocorrelação (PACF)</CardTitle>
-                  </CardHeader>
-                  <CardContent className="h-[450px]">
-                    <Suspense fallback={<div>Carregando gráfico...</div>}>
-                      <Plot
-                        data={[
-                          {
-                            x: results.autocorrelation.lags,
-                            y: results.autocorrelation.pacf_confidence_upper.map(
-                              (val: number) => -val
-                            ),
-                            type: "scatter" as const,
-                            mode: "lines" as const,
-                            line: { width: 0 },
-                            hoverinfo: "none",
-                            showlegend: false,
-                          },
-                          {
-                            x: results.autocorrelation.lags,
-                            y: results.autocorrelation.pacf_confidence_upper,
-                            type: "scatter" as const,
-                            mode: "lines" as const,
-                            fill: "tonexty",
-                            fillcolor: "rgba(59, 130, 246, 0.15)",
-                            line: { width: 0 },
-                            hoverinfo: "none",
-                            name: "Intervalo de Confiança",
-                          },
-                          {
-                            x: results.autocorrelation.lags,
-                            y: results.autocorrelation.pacf,
-                            type: "bar" as const,
-                            width: 0.05,
-                            name: "PACF",
-                            marker: { color: "#2563eb" },
-                          },
-                        ]}
-                        layout={{
-                          autosize: true,
-                          paper_bgcolor: "rgba(0,0,0,0)",
-                          plot_bgcolor: "rgba(0,0,0,0)",
-                          yaxis: {
-                            title: { text: "Correlação" },
-                            range: [-1, 1],
-                            gridcolor: "#f3f4f6",
-                          },
-                          xaxis: {
-                            title: { text: "Lags (Semestres)" },
-                            gridcolor: "#f3f4f6",
-                          },
-                          showlegend: true,
-                          legend: {
-                            x: 0.02,
-                            y: 0.98,
-                            bgcolor: "rgba(255,255,255,0.8)",
-                          },
-                          margin: { t: 20, r: 20, b: 60, l: 60 },
-                        }}
-                        useResizeHandler={true}
-                        className="w-full h-full"
-                        config={{ displayModeBar: false, responsive: true }}
-                      />
-                    </Suspense>
-                  </CardContent>
-                </Card>
+                <PACFChart data={results.autocorrelation} />
               )}
             </div>
           </div>

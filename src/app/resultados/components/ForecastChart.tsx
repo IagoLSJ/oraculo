@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { memo } from 'react';
 import { Frown, RefreshCw, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { ForecastData } from "@/types/analysis";
 
 const Plot = dynamic(() => import('react-plotly.js'), { 
     ssr: false, 
@@ -14,17 +15,6 @@ const Plot = dynamic(() => import('react-plotly.js'), {
         </div>
     ) 
 }) as any;
-
-interface ForecastData {
-    forecast_y: number[];
-    forecast_x: string[];
-    original_x: string[];
-    original_y: number[];
-    test_x?: string[];
-    test_y?: number[];
-    forecast_ci_lower: number[];
-    forecast_ci_upper: number[];
-}
 
 const ForecastChart = memo(({ data }: { data?: ForecastData }) => {
     if (!data) {
@@ -58,7 +48,7 @@ const ForecastChart = memo(({ data }: { data?: ForecastData }) => {
             line: { color: '#2563eb', width: 2 }, marker: { size: 4 }
         },
         // Dados de Teste (se existirem)
-        ...(data.test_y?.length > 0 ? [{
+        ...(data.test_x?.length && data.test_y?.length ? [{
             x: data.test_x, y: data.test_y,
             type: 'scatter', mode: 'lines+markers', name: 'Dados de Teste',
             line: { color: '#059669', width: 2 }, marker: { size: 4 }
