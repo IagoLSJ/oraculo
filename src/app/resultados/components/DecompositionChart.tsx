@@ -227,8 +227,8 @@ const DecompositionChart = memo(
           >
             <Plot
               data={traces}
-              layout={layout as Partial<Plotly.Layout>}
-              config={config as Partial<Plotly.Config>}
+              layout={layout as any}
+              config={config as any}
               useResizeHandler={true}
               className="w-full h-full"
             />
